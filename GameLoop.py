@@ -1,90 +1,168 @@
 import pygame
 import random
 
+# Initialize Pygame
 pygame.init()
-
-running = True
-
-
 screen = pygame.display.set_mode((800, 600))
-cell_image = pygame.image.load('./cell.jpg').convert()
-cell_image = pygame.transform.scale(cell_image, (cell_image.get_width() / 8, cell_image.get_height() / 8))
-bacteria_img = pygame.image.load('cell.jpg').convert()
-bacteria_img = pygame.transform.scale(bacteria_img, (bacteria_img.get_width() / 8, bacteria_img.get_height() / 8))
-
+pygame.display.set_caption("Cell vs Bacteria - Animated")
 clock = pygame.time.Clock()
 
-BACT_SPAWN_EVENT = pygame.USEREVENT + 1
+# --- Load Background Image ---
+try:
+    background = pygame.image.load("bloody-arm.png").convert()
+    background = pygame.transform.scale(background, (800, 600))
+except FileNotFoundError:
+    background = pygame.Surface((800, 600))
+    background.fill((0, 0, 0))
 
-pygame.time.set_timer(BACT_SPAWN_EVENT, 5000)
 
-moving_right = False
-moving_left = False
-x = 0
-delta_time = 0.1
+# --- 1. Define the Bacteria (Enemy) ---
+class Bacteria(pygame.sprite.Sprite):
+    def __init__(self):
+        super().__init__()
 
-bacteria_y = []
-bacteria_x = []
+        # --- ANIMATION STEP 1: Load all images into a list ---
+        self.images = []
+        # We assume your files are named bact1.png, bact2.png, etc.
+        for i in range(1, 5):
+            try:
+                filename = f"bact{i}.png"  # This creates "bact1.png", "bact2.png"...
+                img = pygame.image.load(filename).convert_alpha()
+                img = pygame.transform.scale(img, (100, 100))
+                self.images.append(img)
+            except FileNotFoundError:
+                print(f"Could not load {filename}")
 
+        # Fallback if no images found
+        if len(self.images) == 0:
+            surf = pygame.Surface((30, 30))
+            surf.fill((255, 0, 0))
+            self.images.append(surf)
+
+        # --- ANIMATION STEP 2: Setup Counters ---
+        self.current_frame = 0  # Start at the first image
+        self.animation_speed = 0.2  # How fast to cycle (lower = slower)
+
+        # Set the initial image
+        self.image = self.images[self.current_frame]
+        self.rect = self.image.get_rect()
+        self.mask = pygame.mask.from_surface(self.image)
+
+        # Standard Movement Variables
+        self.rect.x = random.randrange(0, 800 - self.rect.width)
+        self.rect.y = random.randrange(-100, -40)
+        self.speed_y = random.randrange(3, 8)
+
+    def update(self):
+        # 1. Move Down
+        self.rect.y += self.speed_y
+
+        # --- ANIMATION STEP 3: Cycle the Images ---
+        # Increase the frame counter
+        self.current_frame += self.animation_speed
+
+        # If the number exceeds our list length, loop back to 0
+        if self.current_frame >= len(self.images):
+            self.current_frame = 0
+
+        # Update the actual image shown
+        # We use int() because indices must be whole numbers (0, 1, 2...)
+        self.image = self.images[int(self.current_frame)]
+
+        # IMPORTANT: If your animation frames are different shapes,
+        # you must update the mask every frame so collision stays accurate.
+        self.mask = pygame.mask.from_surface(self.image)
+
+        # 2. Kill if off screen
+        if self.rect.top > 600:
+            self.kill()
+
+
+# --- 2. Define the Cell (Player) ---
+class Cell(pygame.sprite.Sprite):
+    def __init__(self):
+        super().__init__()
+        try:
+            self.image = pygame.image.load("cell.png").convert_alpha()
+            self.image = pygame.transform.scale(self.image, (200, 200))
+        except FileNotFoundError:
+            self.image = pygame.Surface((50, 50))
+            self.image.fill((0, 255, 0))
+
+        self.rect = self.image.get_rect()
+        self.mask = pygame.mask.from_surface(self.image)
+
+        self.rect.centerx = 400
+        self.rect.bottom = 580
+        self.speed_x = 0
+        self.speed_y = 0
+
+    def update(self):
+        self.speed_x = 0
+        self.speed_y = 0
+        keystate = pygame.key.get_pressed()
+
+        if keystate[pygame.K_a]:
+            self.speed_x = -5
+        if keystate[pygame.K_RIGHT]:
+            self.speed_x = 5
+        if keystate[pygame.K_UP]:
+            self.speed_y = -5
+        if keystate[pygame.K_DOWN]:
+            self.speed_y = 5
+
+        self.rect.x += self.speed_x
+        self.rect.y += self.speed_y
+
+        if self.rect.right > 800:
+            self.rect.right = 800
+        if self.rect.left < 0:
+            self.rect.left = 0
+        if self.rect.top < 0:
+            self.rect.top = 0
+        if self.rect.bottom > 600:
+            self.rect.bottom = 600
+
+
+# --- 3. Setup Groups ---
+all_sprites = pygame.sprite.Group()
+bacteria_group = pygame.sprite.Group()
+
+player = Cell()
+all_sprites.add(player)
+
+
+def spawn_bacteria():
+    b = Bacteria()
+    all_sprites.add(b)
+    bacteria_group.add(b)
+
+
+for i in range(8):
+    spawn_bacteria()
+
+# --- 4. Game Loop ---
+running = True
 while running:
-    screen.fill((0, 0, 0))
-    screen.blit(cell_image, (x, 400))
-    
-    hitbox = pygame.Rect(x, 400, cell_image.get_width(), cell_image.get_height())
-
-
-    
-    # for a in bacteria_x:
-    #     if bacteria_y < 600:
-    #         screen.blit(bacteria_img, (a, bacteria_y))
-
-    for i in range(len(bacteria_y)):
-        bacteria_y[i] += 50 * delta_time
-        draw_bact = True
-        target = pygame.Rect(bacteria_x[i], bacteria_y[i], bacteria_img.get_width(), bacteria_img.get_height())
-        if hitbox.colliderect(target):
-            draw_bact = False
-            
-        if(bacteria_y[i] < 600 and draw_bact ):
-            screen.blit(bacteria_img, (bacteria_x[i], bacteria_y[i]))
-
-
-
-
-        
-
-
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_d:
-                moving_right = True
-            if event.key == pygame.K_a:
-                moving_left = True
-        if event.type == pygame.KEYUP:
-            if event.key == pygame.K_d:
-                moving_right = False
-            if event.key == pygame.K_a:
-                moving_left = False
-        if event.type == BACT_SPAWN_EVENT:
-            bacteria_x.append(random.randint(1, 800))
-            bacteria_y.append(0)
 
-    if moving_right == True:
-        x += 200 * delta_time
+    all_sprites.update()
 
-    if moving_left == True:
-        x -= 200 * delta_time
+    if len(bacteria_group) < 8:
+        spawn_bacteria()
 
+    # Collision Check (using masks)
+    hits = pygame.sprite.spritecollide(player, bacteria_group, True, pygame.sprite.collide_mask)
 
-    delta_time = clock.tick(60) / 1000
-    delta_time = max(0.001, min(0.1, delta_time))
-    
+    for hit in hits:
+        spawn_bacteria()
+
+    screen.blit(background, (0, 0))
+    all_sprites.draw(screen)
     pygame.display.flip()
 
-
-
+    clock.tick(60)
 
 pygame.quit()
-
